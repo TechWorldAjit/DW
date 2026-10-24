@@ -421,7 +421,9 @@ async function callGeminiForCompanies(companyNames) {
     return companyNames.map((name) => ({
       company: name,
       careersUrl: `https://${name.toLowerCase().replace(/[^a-z0-9]/g, "")}.com/careers`,
-      categories: ["Technology"]
+      categories: ["Technology"],
+      country: "United States",
+      countryCode: "US"
     }));
   }
   const prompt = `You are an expert career research AI. For each of the following company names, determine:
@@ -429,6 +431,7 @@ async function callGeminiForCompanies(companyNames) {
 2. The company's official, direct working careers or job portal page URL (intended for job seekers, prefer official company domains like https://careers.google.com/ or https://www.apple.com/jobs/us/, NOT general homepages if a careers page exists, NEVER invent URLs, NEVER provide third-party job boards like LinkedIn, Indeed, Glassdoor). If unsure, provide the best known official domain careers page.
 3. 1 to 3 relevant industry categories from this standard list or closely related:
 ${STANDARD_CATEGORIES.map((c) => `- ${c}`).join("\n")}
+4. The company's country of origin / global headquarters country name (e.g. 'United States', 'India', 'Germany', 'Japan', 'United Kingdom', etc.) and its 2-letter uppercase ISO 3166-1 alpha-2 country code (e.g. 'US', 'IN', 'DE', 'JP', 'GB').
 
 Companies to research:
 ${companyNames.join(", ")}
@@ -438,7 +441,9 @@ Return a strict JSON array of objects with the exact format:
   {
     "company": "Canonical Name",
     "careersUrl": "https://...",
-    "categories": ["Category 1", "Category 2"]
+    "categories": ["Category 1", "Category 2"],
+    "country": "Country Name",
+    "countryCode": "XX"
   }
 ]`;
   const models = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-flash-latest", "gemini-3.8-flash"];
@@ -521,7 +526,9 @@ async function researchCompanies(names, db) {
         careersUrl: cached.careersUrl,
         isVerified: cached.isVerified,
         verificationStatus: cached.isVerified ? "verified" : "needs_verification",
-        categories: cached.categories || ["Technology"]
+        categories: cached.categories || ["Technology"],
+        country: cached.country || "United States",
+        countryCode: cached.countryCode || "US"
       });
     } else {
       uncachedNames.push(original);
@@ -552,7 +559,9 @@ async function researchCompanies(names, db) {
             careersUrl: cleanedUrl,
             isVerified,
             verificationStatus,
-            categories
+            categories,
+            country: item.country || "United States",
+            countryCode: (item.countryCode || "US").toUpperCase()
           };
           results.push(researched);
           await db.collection("canonical_companies").updateOne(
@@ -564,6 +573,8 @@ async function researchCompanies(names, db) {
                 careersUrl: researched.careersUrl,
                 isVerified: researched.isVerified,
                 categories: researched.categories,
+                country: researched.country,
+                countryCode: researched.countryCode,
                 updatedAt: /* @__PURE__ */ new Date()
               },
               $setOnInsert: {
@@ -584,7 +595,9 @@ async function researchCompanies(names, db) {
             careersUrl: `https://${name.toLowerCase().replace(/[^a-z0-9]/g, "")}.com/careers`,
             isVerified: false,
             verificationStatus: "needs_verification",
-            categories: ["Technology"]
+            categories: ["Technology"],
+            country: "United States",
+            countryCode: "US"
           });
         }
       }
@@ -615,7 +628,9 @@ router2.get("/", async (req, res) => {
       const searchTerm = search.trim();
       query.$or = [
         { name: { $regex: searchTerm, $options: "i" } },
-        { categories: { $regex: searchTerm, $options: "i" } }
+        { categories: { $regex: searchTerm, $options: "i" } },
+        { country: { $regex: searchTerm, $options: "i" } },
+        { countryCode: { $regex: searchTerm, $options: "i" } }
       ];
     }
     const [companies, totalFilteredCount, userTotalCount, categoryAgg] = await Promise.all([
@@ -713,6 +728,8 @@ router2.post(
           isVerified: item.isVerified,
           verificationStatus: item.verificationStatus,
           categories: item.categories,
+          country: item.country,
+          countryCode: item.countryCode,
           isFavorite: false,
           isPinned: false,
           createdAt: /* @__PURE__ */ new Date(),
@@ -814,7 +831,7 @@ router2.patch("/:id/pin", async (req, res) => {
 router2.put("/:id", async (req, res) => {
   try {
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    const { name, careersUrl, categories } = req.body;
+    const { name, careersUrl, categories, country, countryCode } = req.body;
     const userId = new ObjectId2(req.user.userId);
     if (!id || !ObjectId2.isValid(id)) {
       res.status(400).json({ error: "Invalid company ID" });
@@ -847,6 +864,12 @@ router2.put("/:id", async (req, res) => {
       updateFields.careersUrl = cleanedUrl;
       updateFields.isVerified = isVerified;
       updateFields.verificationStatus = isVerified ? "verified" : "manual";
+    }
+    if (country !== void 0 && typeof country === "string") {
+      updateFields.country = country.trim();
+    }
+    if (countryCode !== void 0 && typeof countryCode === "string") {
+      updateFields.countryCode = countryCode.trim().toUpperCase();
     }
     await db.collection("companies").updateOne(
       { _id: new ObjectId2(id), userId },

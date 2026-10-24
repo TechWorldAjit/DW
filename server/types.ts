@@ -25,6 +25,8 @@ export interface CompanyDoc {
   isVerified: boolean;
   verificationStatus: VerificationStatus;
   categories: string[];
+  country?: string;
+  countryCode?: string;
   isFavorite: boolean;
   isPinned: boolean;
   createdAt: Date;
@@ -38,6 +40,8 @@ export interface CanonicalCompanyDoc {
   careersUrl: string;
   isVerified: boolean;
   categories: string[];
+  country?: string;
+  countryCode?: string;
   createdAt: Date;
   updatedAt: Date;
 }

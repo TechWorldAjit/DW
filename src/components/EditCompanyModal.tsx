@@ -18,6 +18,8 @@ export const EditCompanyModal: React.FC<EditCompanyModalProps> = ({
   const [name, setName] = useState('');
   const [careersUrl, setCareersUrl] = useState('');
   const [categoriesInput, setCategoriesInput] = useState('');
+  const [country, setCountry] = useState('');
+  const [countryCode, setCountryCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -26,6 +28,8 @@ export const EditCompanyModal: React.FC<EditCompanyModalProps> = ({
       setName(company.name);
       setCareersUrl(company.careersUrl || '');
       setCategoriesInput(company.categories?.join(', ') || '');
+      setCountry(company.country || '');
+      setCountryCode(company.countryCode || '');
       setErrorMessage('');
     }
   }, [company]);
@@ -55,6 +59,8 @@ export const EditCompanyModal: React.FC<EditCompanyModalProps> = ({
           name: name.trim(),
           careersUrl: careersUrl.trim(),
           categories,
+          country: country.trim(),
+          countryCode: countryCode.trim().toUpperCase(),
         }),
       });
 
@@ -139,6 +145,34 @@ export const EditCompanyModal: React.FC<EditCompanyModalProps> = ({
             <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
               e.g. Technology, Hardware, Automobile, Food, Finance
             </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-2">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Country of Origin
+              </label>
+              <input
+                type="text"
+                value={country}
+                onChange={(e) => setCountry(e.target.value)}
+                placeholder="United States, India, Germany..."
+                className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-700 focus:border-brand-500 focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Country Code
+              </label>
+              <input
+                type="text"
+                value={countryCode}
+                maxLength={2}
+                onChange={(e) => setCountryCode(e.target.value.toUpperCase())}
+                placeholder="US, IN, DE..."
+                className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-700 focus:border-brand-500 focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition-all uppercase"
+              />
+            </div>
           </div>
 
           {errorMessage && (

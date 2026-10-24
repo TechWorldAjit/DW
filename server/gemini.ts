@@ -55,6 +55,8 @@ export interface ResearchedCompany {
   isVerified: boolean;
   verificationStatus: VerificationStatus;
   categories: string[];
+  country?: string;
+  countryCode?: string;
 }
 
 /**
@@ -161,6 +163,8 @@ async function callGeminiForCompanies(companyNames: string[]): Promise<
     company: string;
     careersUrl: string;
     categories: string[];
+    country?: string;
+    countryCode?: string;
   }>
 > {
   if (!GEMINI_API_KEY) {
@@ -169,6 +173,8 @@ async function callGeminiForCompanies(companyNames: string[]): Promise<
       company: name,
       careersUrl: `https://${name.toLowerCase().replace(/[^a-z0-9]/g, '')}.com/careers`,
       categories: ['Technology'],
+      country: 'United States',
+      countryCode: 'US',
     }));
   }
 
@@ -177,6 +183,7 @@ async function callGeminiForCompanies(companyNames: string[]): Promise<
 2. The company's official, direct working careers or job portal page URL (intended for job seekers, prefer official company domains like https://careers.google.com/ or https://www.apple.com/jobs/us/, NOT general homepages if a careers page exists, NEVER invent URLs, NEVER provide third-party job boards like LinkedIn, Indeed, Glassdoor). If unsure, provide the best known official domain careers page.
 3. 1 to 3 relevant industry categories from this standard list or closely related:
 ${STANDARD_CATEGORIES.map((c) => `- ${c}`).join('\n')}
+4. The company's country of origin / global headquarters country name (e.g. 'United States', 'India', 'Germany', 'Japan', 'United Kingdom', etc.) and its 2-letter uppercase ISO 3166-1 alpha-2 country code (e.g. 'US', 'IN', 'DE', 'JP', 'GB').
 
 Companies to research:
 ${companyNames.join(', ')}
@@ -186,7 +193,9 @@ Return a strict JSON array of objects with the exact format:
   {
     "company": "Canonical Name",
     "careersUrl": "https://...",
-    "categories": ["Category 1", "Category 2"]
+    "categories": ["Category 1", "Category 2"],
+    "country": "Country Name",
+    "countryCode": "XX"
   }
 ]`;
 
@@ -293,6 +302,8 @@ export async function researchCompanies(
         isVerified: cached.isVerified,
         verificationStatus: cached.isVerified ? 'verified' : 'needs_verification',
         categories: cached.categories || ['Technology'],
+        country: cached.country || 'United States',
+        countryCode: cached.countryCode || 'US',
       });
     } else {
       uncachedNames.push(original);
@@ -335,6 +346,8 @@ export async function researchCompanies(
             isVerified,
             verificationStatus,
             categories,
+            country: item.country || 'United States',
+            countryCode: (item.countryCode || 'US').toUpperCase(),
           };
 
           results.push(researched);
@@ -349,6 +362,8 @@ export async function researchCompanies(
                 careersUrl: researched.careersUrl,
                 isVerified: researched.isVerified,
                 categories: researched.categories,
+                country: researched.country,
+                countryCode: researched.countryCode,
                 updatedAt: new Date(),
               },
               $setOnInsert: {
@@ -371,6 +386,8 @@ export async function researchCompanies(
             isVerified: false,
             verificationStatus: 'needs_verification',
             categories: ['Technology'],
+            country: 'United States',
+            countryCode: 'US',
           });
         }
       }

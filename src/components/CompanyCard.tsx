@@ -63,6 +63,28 @@ export const CompanyCard: React.FC<CompanyCardProps> = ({
               >
                 {company.name}
               </h2>
+              {company.countryCode && (
+                <span
+                  className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700/80 shrink-0 select-none hover:bg-slate-200/70 dark:hover:bg-slate-700/70 transition-colors"
+                  title={`Country of origin: ${company.country || company.countryCode}`}
+                >
+                  <img
+                    src={`https://flagcdn.com/20x15/${company.countryCode.toLowerCase()}.png`}
+                    srcSet={`https://flagcdn.com/40x30/${company.countryCode.toLowerCase()}.png 2x`}
+                    width="16"
+                    height="12"
+                    alt={company.country || company.countryCode}
+                    className="inline-block rounded-[2px] shadow-xs object-cover"
+                    loading="lazy"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                  <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-400">
+                    {company.countryCode}
+                  </span>
+                </span>
+              )}
               {company.isPinned && (
                 <span
                   className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/60 px-1.5 py-0.5 rounded"

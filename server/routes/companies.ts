@@ -46,6 +46,8 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
       query.$or = [
         { name: { $regex: searchTerm, $options: 'i' } },
         { categories: { $regex: searchTerm, $options: 'i' } },
+        { country: { $regex: searchTerm, $options: 'i' } },
+        { countryCode: { $regex: searchTerm, $options: 'i' } },
       ];
     }
 
@@ -188,6 +190,8 @@ router.post(
           isVerified: item.isVerified,
           verificationStatus: item.verificationStatus,
           categories: item.categories,
+          country: item.country,
+          countryCode: item.countryCode,
           isFavorite: false,
           isPinned: false,
           createdAt: new Date(),
@@ -321,7 +325,7 @@ router.patch('/:id/pin', async (req: AuthenticatedRequest, res: Response): Promi
 router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    const { name, careersUrl, categories } = req.body;
+    const { name, careersUrl, categories, country, countryCode } = req.body;
     const userId = new ObjectId(req.user!.userId);
 
     if (!id || !ObjectId.isValid(id)) {
@@ -363,6 +367,14 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       updateFields.careersUrl = cleanedUrl;
       updateFields.isVerified = isVerified;
       updateFields.verificationStatus = isVerified ? 'verified' : 'manual';
+    }
+
+    if (country !== undefined && typeof country === 'string') {
+      updateFields.country = country.trim();
+    }
+
+    if (countryCode !== undefined && typeof countryCode === 'string') {
+      updateFields.countryCode = countryCode.trim().toUpperCase();
     }
 
     await db.collection<CompanyDoc>('companies').updateOne(

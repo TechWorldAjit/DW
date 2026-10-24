@@ -18,6 +18,8 @@ export interface Company {
   isVerified: boolean;
   verificationStatus: VerificationStatus;
   categories: string[];
+  country?: string;
+  countryCode?: string;
   isFavorite: boolean;
   isPinned: boolean;
   createdAt: string;
