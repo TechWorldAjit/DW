@@ -57,6 +57,11 @@ export interface ResearchedCompany {
   categories: string[];
   country?: string;
   countryCode?: string;
+  packageScore?: number;
+  packageText?: string;
+  popularityScore?: number;
+  offerEaseScore?: number;
+  hiringDifficulty?: 'Easy' | 'Moderate' | 'Hard' | 'Very Competitive';
 }
 
 /**
@@ -165,6 +170,11 @@ async function callGeminiForCompanies(companyNames: string[]): Promise<
     categories: string[];
     country?: string;
     countryCode?: string;
+    packageScore?: number;
+    packageText?: string;
+    popularityScore?: number;
+    offerEaseScore?: number;
+    hiringDifficulty?: 'Easy' | 'Moderate' | 'Hard' | 'Very Competitive';
   }>
 > {
   if (!GEMINI_API_KEY) {
@@ -175,6 +185,11 @@ async function callGeminiForCompanies(companyNames: string[]): Promise<
       categories: ['Technology'],
       country: 'United States',
       countryCode: 'US',
+      packageScore: 60,
+      packageText: 'Competitive',
+      popularityScore: 60,
+      offerEaseScore: 50,
+      hiringDifficulty: 'Moderate',
     }));
   }
 
@@ -184,6 +199,9 @@ async function callGeminiForCompanies(companyNames: string[]): Promise<
 3. 1 to 3 relevant industry categories from this standard list or closely related:
 ${STANDARD_CATEGORIES.map((c) => `- ${c}`).join('\n')}
 4. The company's country of origin / global headquarters country name (e.g. 'United States', 'India', 'Germany', 'Japan', 'United Kingdom', etc.) and its 2-letter uppercase ISO 3166-1 alpha-2 country code (e.g. 'US', 'IN', 'DE', 'JP', 'GB').
+5. Career compensation score packageScore (integer 1-100, where 85-100 is high packages like top tech/HFT/finance, 60-84 is competitive, 25-59 is standard) and packageText (e.g. "High Package", "Competitive", "Standard").
+6. Brand popularity score popularityScore (integer 1-100, where 90-100 is globally renowned giants, 50-89 is well known, 10-49 is niche/hidden gems).
+7. Hiring accessibility / offer ease score offerEaseScore (integer 1-100, where 75-100 means large-scale hiring / easiest to get an offer, 40-74 is moderate, 10-39 is highly selective) and hiringDifficulty ("Easy" | "Moderate" | "Hard" | "Very Competitive").
 
 Companies to research:
 ${companyNames.join(', ')}
@@ -195,7 +213,12 @@ Return a strict JSON array of objects with the exact format:
     "careersUrl": "https://...",
     "categories": ["Category 1", "Category 2"],
     "country": "Country Name",
-    "countryCode": "XX"
+    "countryCode": "XX",
+    "packageScore": 85,
+    "packageText": "High Package",
+    "popularityScore": 90,
+    "offerEaseScore": 30,
+    "hiringDifficulty": "Competitive"
   }
 ]`;
 
@@ -304,6 +327,11 @@ export async function researchCompanies(
         categories: cached.categories || ['Technology'],
         country: cached.country || 'United States',
         countryCode: cached.countryCode || 'US',
+        packageScore: cached.packageScore || 65,
+        packageText: cached.packageText || 'Competitive',
+        popularityScore: cached.popularityScore || 65,
+        offerEaseScore: cached.offerEaseScore || 50,
+        hiringDifficulty: cached.hiringDifficulty || 'Moderate',
       });
     } else {
       uncachedNames.push(original);
@@ -348,6 +376,11 @@ export async function researchCompanies(
             categories,
             country: item.country || 'United States',
             countryCode: (item.countryCode || 'US').toUpperCase(),
+            packageScore: typeof item.packageScore === 'number' ? item.packageScore : 65,
+            packageText: item.packageText || 'Competitive',
+            popularityScore: typeof item.popularityScore === 'number' ? item.popularityScore : 65,
+            offerEaseScore: typeof item.offerEaseScore === 'number' ? item.offerEaseScore : 50,
+            hiringDifficulty: item.hiringDifficulty || 'Moderate',
           };
 
           results.push(researched);
@@ -364,6 +397,11 @@ export async function researchCompanies(
                 categories: researched.categories,
                 country: researched.country,
                 countryCode: researched.countryCode,
+                packageScore: researched.packageScore,
+                packageText: researched.packageText,
+                popularityScore: researched.popularityScore,
+                offerEaseScore: researched.offerEaseScore,
+                hiringDifficulty: researched.hiringDifficulty,
                 updatedAt: new Date(),
               },
               $setOnInsert: {

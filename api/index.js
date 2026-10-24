@@ -423,7 +423,12 @@ async function callGeminiForCompanies(companyNames) {
       careersUrl: `https://${name.toLowerCase().replace(/[^a-z0-9]/g, "")}.com/careers`,
       categories: ["Technology"],
       country: "United States",
-      countryCode: "US"
+      countryCode: "US",
+      packageScore: 60,
+      packageText: "Competitive",
+      popularityScore: 60,
+      offerEaseScore: 50,
+      hiringDifficulty: "Moderate"
     }));
   }
   const prompt = `You are an expert career research AI. For each of the following company names, determine:
@@ -432,6 +437,9 @@ async function callGeminiForCompanies(companyNames) {
 3. 1 to 3 relevant industry categories from this standard list or closely related:
 ${STANDARD_CATEGORIES.map((c) => `- ${c}`).join("\n")}
 4. The company's country of origin / global headquarters country name (e.g. 'United States', 'India', 'Germany', 'Japan', 'United Kingdom', etc.) and its 2-letter uppercase ISO 3166-1 alpha-2 country code (e.g. 'US', 'IN', 'DE', 'JP', 'GB').
+5. Career compensation score packageScore (integer 1-100, where 85-100 is high packages like top tech/HFT/finance, 60-84 is competitive, 25-59 is standard) and packageText (e.g. "High Package", "Competitive", "Standard").
+6. Brand popularity score popularityScore (integer 1-100, where 90-100 is globally renowned giants, 50-89 is well known, 10-49 is niche/hidden gems).
+7. Hiring accessibility / offer ease score offerEaseScore (integer 1-100, where 75-100 means large-scale hiring / easiest to get an offer, 40-74 is moderate, 10-39 is highly selective) and hiringDifficulty ("Easy" | "Moderate" | "Hard" | "Very Competitive").
 
 Companies to research:
 ${companyNames.join(", ")}
@@ -443,7 +451,12 @@ Return a strict JSON array of objects with the exact format:
     "careersUrl": "https://...",
     "categories": ["Category 1", "Category 2"],
     "country": "Country Name",
-    "countryCode": "XX"
+    "countryCode": "XX",
+    "packageScore": 85,
+    "packageText": "High Package",
+    "popularityScore": 90,
+    "offerEaseScore": 30,
+    "hiringDifficulty": "Competitive"
   }
 ]`;
   const models = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-flash-latest", "gemini-3.8-flash"];
@@ -528,7 +541,12 @@ async function researchCompanies(names, db) {
         verificationStatus: cached.isVerified ? "verified" : "needs_verification",
         categories: cached.categories || ["Technology"],
         country: cached.country || "United States",
-        countryCode: cached.countryCode || "US"
+        countryCode: cached.countryCode || "US",
+        packageScore: cached.packageScore || 65,
+        packageText: cached.packageText || "Competitive",
+        popularityScore: cached.popularityScore || 65,
+        offerEaseScore: cached.offerEaseScore || 50,
+        hiringDifficulty: cached.hiringDifficulty || "Moderate"
       });
     } else {
       uncachedNames.push(original);
@@ -561,7 +579,12 @@ async function researchCompanies(names, db) {
             verificationStatus,
             categories,
             country: item.country || "United States",
-            countryCode: (item.countryCode || "US").toUpperCase()
+            countryCode: (item.countryCode || "US").toUpperCase(),
+            packageScore: typeof item.packageScore === "number" ? item.packageScore : 65,
+            packageText: item.packageText || "Competitive",
+            popularityScore: typeof item.popularityScore === "number" ? item.popularityScore : 65,
+            offerEaseScore: typeof item.offerEaseScore === "number" ? item.offerEaseScore : 50,
+            hiringDifficulty: item.hiringDifficulty || "Moderate"
           };
           results.push(researched);
           await db.collection("canonical_companies").updateOne(
@@ -575,6 +598,11 @@ async function researchCompanies(names, db) {
                 categories: researched.categories,
                 country: researched.country,
                 countryCode: researched.countryCode,
+                packageScore: researched.packageScore,
+                packageText: researched.packageText,
+                popularityScore: researched.popularityScore,
+                offerEaseScore: researched.offerEaseScore,
+                hiringDifficulty: researched.hiringDifficulty,
                 updatedAt: /* @__PURE__ */ new Date()
               },
               $setOnInsert: {
@@ -612,7 +640,7 @@ router2.use(requireAuth);
 router2.get("/", async (req, res) => {
   try {
     const userId = new ObjectId2(req.user.userId);
-    const { search, category, favoritesOnly, page = "1", limit = "100" } = req.query;
+    const { search, category, favoritesOnly, page = "1", limit = "100", sortBy } = req.query;
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 100));
     const skip = (pageNum - 1) * limitNum;
@@ -633,8 +661,24 @@ router2.get("/", async (req, res) => {
         { countryCode: { $regex: searchTerm, $options: "i" } }
       ];
     }
+    const sortObj = { isPinned: -1 };
+    if (sortBy === "high-package") {
+      sortObj.packageScore = -1;
+      sortObj.name = 1;
+    } else if (sortBy === "popular") {
+      sortObj.popularityScore = -1;
+      sortObj.name = 1;
+    } else if (sortBy === "least-popular") {
+      sortObj.popularityScore = 1;
+      sortObj.name = 1;
+    } else if (sortBy === "easy-offer") {
+      sortObj.offerEaseScore = -1;
+      sortObj.name = 1;
+    } else {
+      sortObj.createdAt = -1;
+    }
     const [companies, totalFilteredCount, userTotalCount, categoryAgg] = await Promise.all([
-      db.collection("companies").find(query).sort({ isPinned: -1, createdAt: -1 }).skip(skip).limit(limitNum).toArray(),
+      db.collection("companies").find(query).sort(sortObj).skip(skip).limit(limitNum).toArray(),
       db.collection("companies").countDocuments(query),
       db.collection("companies").countDocuments({ userId }),
       db.collection("companies").aggregate([
@@ -730,6 +774,11 @@ router2.post(
           categories: item.categories,
           country: item.country,
           countryCode: item.countryCode,
+          packageScore: item.packageScore,
+          packageText: item.packageText,
+          popularityScore: item.popularityScore,
+          offerEaseScore: item.offerEaseScore,
+          hiringDifficulty: item.hiringDifficulty,
           isFavorite: false,
           isPinned: false,
           createdAt: /* @__PURE__ */ new Date(),

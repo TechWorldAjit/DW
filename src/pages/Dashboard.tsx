@@ -5,7 +5,7 @@ import { CompanyCard } from '../components/CompanyCard';
 import { AddCompaniesModal } from '../components/AddCompaniesModal';
 import { EditCompanyModal } from '../components/EditCompanyModal';
 import { AdminModal } from '../components/AdminModal';
-import { Company, CategoryFacet, BatchAddResult } from '../types';
+import { Company, CategoryFacet, BatchAddResult, SortOption } from '../types';
 import {
   Briefcase,
   Plus,
@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   FilterX,
+  ArrowUpDown,
 } from 'lucide-react';
 
 export const Dashboard: React.FC = () => {
@@ -22,6 +23,7 @@ export const Dashboard: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [favoritesOnly, setFavoritesOnly] = useState<boolean>(false);
+  const [sortBy, setSortBy] = useState<SortOption>('default');
   const [page, setPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [totalCount, setTotalCount] = useState<number>(0);
@@ -41,6 +43,7 @@ export const Dashboard: React.FC = () => {
       if (searchQuery.trim()) params.set('search', searchQuery.trim());
       if (selectedCategory !== 'All') params.set('category', selectedCategory);
       if (favoritesOnly) params.set('favoritesOnly', 'true');
+      if (sortBy !== 'default') params.set('sortBy', sortBy);
       params.set('page', String(page));
       params.set('limit', '60');
 
@@ -58,16 +61,16 @@ export const Dashboard: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [searchQuery, selectedCategory, favoritesOnly, page]);
+  }, [searchQuery, selectedCategory, favoritesOnly, sortBy, page]);
 
   useEffect(() => {
     fetchCompanies();
   }, [fetchCompanies]);
 
-  // Reset to page 1 when filter changes
+  // Reset to page 1 when filter or sort changes
   useEffect(() => {
     setPage(1);
-  }, [searchQuery, selectedCategory, favoritesOnly]);
+  }, [searchQuery, selectedCategory, favoritesOnly, sortBy]);
 
   // Toggle favorite
   const handleToggleFavorite = async (id: string) => {
@@ -203,6 +206,7 @@ export const Dashboard: React.FC = () => {
                 setSearchQuery('');
                 setSelectedCategory('All');
                 setFavoritesOnly(false);
+                setSortBy('default');
               }}
               className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline"
             >
@@ -212,7 +216,7 @@ export const Dashboard: React.FC = () => {
         ) : (
           /* Compact Responsive Cards Grid */
           <div>
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <div className="text-xs text-slate-500 dark:text-slate-400">
                 Showing{' '}
                 <strong className="text-slate-700 dark:text-slate-200 font-semibold">
@@ -223,14 +227,36 @@ export const Dashboard: React.FC = () => {
                 {favoritesOnly && ' (Favorites only)'}
               </div>
 
-              {favoritesOnly && (
-                <button
-                  onClick={() => setFavoritesOnly(false)}
-                  className="text-xs text-amber-600 dark:text-amber-400 hover:underline font-medium"
-                >
-                  Show all companies
-                </button>
-              )}
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                {favoritesOnly && (
+                  <button
+                    onClick={() => setFavoritesOnly(false)}
+                    className="text-xs text-amber-600 dark:text-amber-400 hover:underline font-medium mr-1"
+                  >
+                    Show all
+                  </button>
+                )}
+
+                {/* Sort Dropdown Selector */}
+                <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 shadow-xs">
+                  <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <label htmlFor="sort-select" className="text-xs text-slate-500 dark:text-slate-400 font-medium shrink-0">
+                    Sort:
+                  </label>
+                  <select
+                    id="sort-select"
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as SortOption)}
+                    className="text-xs font-semibold bg-transparent text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer pr-1"
+                  >
+                    <option value="default" className="dark:bg-slate-900">Default (Pinned & Recent)</option>
+                    <option value="high-package" className="dark:bg-slate-900">💰 Highest Packages</option>
+                    <option value="popular" className="dark:bg-slate-900">🔥 Most Popular</option>
+                    <option value="least-popular" className="dark:bg-slate-900">🧭 Least Popular / Hidden Gems</option>
+                    <option value="easy-offer" className="dark:bg-slate-900">🎯 Easy to Get an Offer</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">

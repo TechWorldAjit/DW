@@ -22,7 +22,7 @@ router.use(requireAuth);
 router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = new ObjectId(req.user!.userId);
-    const { search, category, favoritesOnly, page = '1', limit = '100' } = req.query;
+    const { search, category, favoritesOnly, page = '1', limit = '100', sortBy } = req.query;
 
     const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
     const limitNum = Math.min(200, Math.max(1, parseInt(limit as string, 10) || 100));
@@ -51,12 +51,30 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
       ];
     }
 
+    // Determine sort criteria
+    const sortObj: any = { isPinned: -1 };
+    if (sortBy === 'high-package') {
+      sortObj.packageScore = -1;
+      sortObj.name = 1;
+    } else if (sortBy === 'popular') {
+      sortObj.popularityScore = -1;
+      sortObj.name = 1;
+    } else if (sortBy === 'least-popular') {
+      sortObj.popularityScore = 1;
+      sortObj.name = 1;
+    } else if (sortBy === 'easy-offer') {
+      sortObj.offerEaseScore = -1;
+      sortObj.name = 1;
+    } else {
+      sortObj.createdAt = -1;
+    }
+
     // Parallel fetch: matching companies, total matching count, total user count, and category facets
     const [companies, totalFilteredCount, userTotalCount, categoryAgg] = await Promise.all([
       db
         .collection<CompanyDoc>('companies')
         .find(query)
-        .sort({ isPinned: -1, createdAt: -1 })
+        .sort(sortObj)
         .skip(skip)
         .limit(limitNum)
         .toArray(),
@@ -192,6 +210,11 @@ router.post(
           categories: item.categories,
           country: item.country,
           countryCode: item.countryCode,
+          packageScore: item.packageScore,
+          packageText: item.packageText,
+          popularityScore: item.popularityScore,
+          offerEaseScore: item.offerEaseScore,
+          hiringDifficulty: item.hiringDifficulty,
           isFavorite: false,
           isPinned: false,
           createdAt: new Date(),

@@ -27,6 +27,11 @@ export interface CompanyDoc {
   categories: string[];
   country?: string;
   countryCode?: string;
+  packageScore?: number;
+  packageText?: string;
+  popularityScore?: number;
+  offerEaseScore?: number;
+  hiringDifficulty?: 'Easy' | 'Moderate' | 'Hard' | 'Very Competitive';
   isFavorite: boolean;
   isPinned: boolean;
   createdAt: Date;
@@ -42,6 +47,11 @@ export interface CanonicalCompanyDoc {
   categories: string[];
   country?: string;
   countryCode?: string;
+  packageScore?: number;
+  packageText?: string;
+  popularityScore?: number;
+  offerEaseScore?: number;
+  hiringDifficulty?: 'Easy' | 'Moderate' | 'Hard' | 'Very Competitive';
   createdAt: Date;
   updatedAt: Date;
 }

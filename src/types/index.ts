@@ -9,6 +9,8 @@ export interface User {
 
 export type VerificationStatus = 'verified' | 'needs_verification' | 'manual';
 
+export type SortOption = 'default' | 'high-package' | 'popular' | 'least-popular' | 'easy-offer';
+
 export interface Company {
   _id: string;
   userId: string;
@@ -20,6 +22,11 @@ export interface Company {
   categories: string[];
   country?: string;
   countryCode?: string;
+  packageScore?: number;
+  packageText?: string;
+  popularityScore?: number;
+  offerEaseScore?: number;
+  hiringDifficulty?: 'Easy' | 'Moderate' | 'Hard' | 'Very Competitive';
   isFavorite: boolean;
   isPinned: boolean;
   createdAt: string;
