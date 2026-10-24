@@ -5,7 +5,7 @@ import { CompanyCard } from '../components/CompanyCard';
 import { AddCompaniesModal } from '../components/AddCompaniesModal';
 import { EditCompanyModal } from '../components/EditCompanyModal';
 import { AdminModal } from '../components/AdminModal';
-import { Company, CategoryFacet, BatchAddResult, SortOption } from '../types';
+import { Company, CategoryFacet, CountryFacet, BatchAddResult, SortOption } from '../types';
 import {
   Briefcase,
   Plus,
@@ -15,12 +15,16 @@ import {
   ChevronRight,
   FilterX,
   ArrowUpDown,
+  Download,
+  Globe,
 } from 'lucide-react';
 
 export const Dashboard: React.FC = () => {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [categories, setCategories] = useState<CategoryFacet[]>([]);
+  const [countries, setCountries] = useState<CountryFacet[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [selectedCountry, setSelectedCountry] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [favoritesOnly, setFavoritesOnly] = useState<boolean>(false);
   const [sortBy, setSortBy] = useState<SortOption>('default');
@@ -29,6 +33,7 @@ export const Dashboard: React.FC = () => {
   const [totalCount, setTotalCount] = useState<number>(0);
   const [userTotalCount, setUserTotalCount] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isDownloading, setIsDownloading] = useState<boolean>(false);
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
@@ -42,6 +47,7 @@ export const Dashboard: React.FC = () => {
       const params = new URLSearchParams();
       if (searchQuery.trim()) params.set('search', searchQuery.trim());
       if (selectedCategory !== 'All') params.set('category', selectedCategory);
+      if (selectedCountry !== 'All') params.set('country', selectedCountry);
       if (favoritesOnly) params.set('favoritesOnly', 'true');
       if (sortBy !== 'default') params.set('sortBy', sortBy);
       params.set('page', String(page));
@@ -54,6 +60,7 @@ export const Dashboard: React.FC = () => {
         setTotalCount(data.totalCount || 0);
         setUserTotalCount(data.userTotalCount || 0);
         setCategories(data.categories || []);
+        setCountries(data.countries || []);
         setTotalPages(data.totalPages || 1);
       }
     } catch (err) {
@@ -61,7 +68,7 @@ export const Dashboard: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [searchQuery, selectedCategory, favoritesOnly, sortBy, page]);
+  }, [searchQuery, selectedCategory, selectedCountry, favoritesOnly, sortBy, page]);
 
   useEffect(() => {
     fetchCompanies();
@@ -70,7 +77,7 @@ export const Dashboard: React.FC = () => {
   // Reset to page 1 when filter or sort changes
   useEffect(() => {
     setPage(1);
-  }, [searchQuery, selectedCategory, favoritesOnly, sortBy]);
+  }, [searchQuery, selectedCategory, selectedCountry, favoritesOnly, sortBy]);
 
   // Toggle favorite
   const handleToggleFavorite = async (id: string) => {
@@ -138,6 +145,63 @@ export const Dashboard: React.FC = () => {
     fetchCompanies();
   };
 
+  // Download CSV of all companies with tags
+  const handleDownloadCSV = async () => {
+    setIsDownloading(true);
+    try {
+      const res = await fetch('/api/companies/export');
+      if (!res.ok) {
+        throw new Error('Failed to export companies from server');
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'companies.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export download error, falling back to loaded records:', err);
+      if (companies.length > 0) {
+        const escapeCsv = (val: any) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+        const headers = [
+          'Company Name',
+          'Careers URL',
+          'Tags',
+          'Country',
+          'Country Code',
+          'Package',
+          'Hiring Difficulty',
+          'Verified',
+        ];
+        const rows = companies.map((c) => [
+          escapeCsv(c.name),
+          escapeCsv(c.careersUrl),
+          escapeCsv((c.categories || []).join(', ')),
+          escapeCsv(c.country || ''),
+          escapeCsv(c.countryCode || ''),
+          escapeCsv(c.packageText || ''),
+          escapeCsv(c.hiringDifficulty || ''),
+          escapeCsv(c.isVerified ? 'Yes' : 'No'),
+        ]);
+        const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'companies.csv';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      }
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors">
       
@@ -191,30 +255,8 @@ export const Dashboard: React.FC = () => {
               <span>Add Your First Companies</span>
             </button>
           </div>
-        ) : companies.length === 0 ? (
-          /* Filtered No Results State */
-          <div className="max-w-sm mx-auto my-16 text-center p-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-            <FilterX className="w-8 h-8 mx-auto text-slate-400 mb-2" />
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
-              No matching companies found
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-              Try adjusting your search query, category filter, or favorites toggle.
-            </p>
-            <button
-              onClick={() => {
-                setSearchQuery('');
-                setSelectedCategory('All');
-                setFavoritesOnly(false);
-                setSortBy('default');
-              }}
-              className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline"
-            >
-              Reset all filters
-            </button>
-          </div>
         ) : (
-          /* Compact Responsive Cards Grid */
+          /* Directory Content Area */
           <div>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <div className="text-xs text-slate-500 dark:text-slate-400">
@@ -224,10 +266,11 @@ export const Dashboard: React.FC = () => {
                 </strong>{' '}
                 of {totalCount} {totalCount === 1 ? 'company' : 'companies'}
                 {selectedCategory !== 'All' && ` in "${selectedCategory}"`}
+                {selectedCountry !== 'All' && ` from "${selectedCountry}"`}
                 {favoritesOnly && ' (Favorites only)'}
               </div>
 
-              <div className="flex items-center gap-2 self-start sm:self-auto">
+              <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
                 {favoritesOnly && (
                   <button
                     onClick={() => setFavoritesOnly(false)}
@@ -236,6 +279,27 @@ export const Dashboard: React.FC = () => {
                     Show all
                   </button>
                 )}
+
+                {/* Country Filter Selector */}
+                <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 shadow-xs">
+                  <Globe className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <label htmlFor="country-select" className="text-xs text-slate-500 dark:text-slate-400 font-medium shrink-0">
+                    Country:
+                  </label>
+                  <select
+                    id="country-select"
+                    value={selectedCountry}
+                    onChange={(e) => setSelectedCountry(e.target.value)}
+                    className="text-xs font-semibold bg-transparent text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer pr-1"
+                  >
+                    <option value="All" className="dark:bg-slate-900">All Countries</option>
+                    {countries.map((c) => (
+                      <option key={c.name} value={c.name} className="dark:bg-slate-900">
+                        {c.name} ({c.count})
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
                 {/* Sort Dropdown Selector */}
                 <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 shadow-xs">
@@ -256,43 +320,86 @@ export const Dashboard: React.FC = () => {
                     <option value="easy-offer" className="dark:bg-slate-900">🎯 Easy to Get an Offer</option>
                   </select>
                 </div>
+
+                {/* Download CSV Button */}
+                <button
+                  id="download-csv-btn"
+                  onClick={handleDownloadCSV}
+                  disabled={isDownloading || userTotalCount === 0}
+                  className="flex items-center gap-1.5 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 shadow-xs text-xs font-semibold text-slate-700 dark:text-slate-200 transition-colors disabled:opacity-50 active:scale-95 cursor-pointer"
+                  title="Download CSV of all companies with tags"
+                >
+                  {isDownloading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-600" />
+                  ) : (
+                    <Download className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                  )}
+                  <span>Download CSV</span>
+                </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
-              {companies.map((company) => (
-                <CompanyCard
-                  key={company._id}
-                  company={company}
-                  onToggleFavorite={handleToggleFavorite}
-                  onTogglePin={handleTogglePin}
-                  onEdit={(comp) => setEditingCompany(comp)}
-                  onDelete={handleDeleteCompany}
-                  onCategoryClick={(cat) => setSelectedCategory(cat)}
-                />
-              ))}
-            </div>
+            {companies.length === 0 ? (
+              /* Filtered No Results State */
+              <div className="max-w-sm mx-auto my-16 text-center p-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                <FilterX className="w-8 h-8 mx-auto text-slate-400 mb-2" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
+                  No matching companies found
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                  Try adjusting your search query, category filter, country filter, or favorites toggle.
+                </p>
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSelectedCategory('All');
+                    setSelectedCountry('All');
+                    setFavoritesOnly(false);
+                    setSortBy('default');
+                  }}
+                  className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline cursor-pointer"
+                >
+                  Reset all filters
+                </button>
+              </div>
+            ) : (
+              <div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
+                  {companies.map((company) => (
+                    <CompanyCard
+                      key={company._id}
+                      company={company}
+                      onToggleFavorite={handleToggleFavorite}
+                      onTogglePin={handleTogglePin}
+                      onEdit={(comp) => setEditingCompany(comp)}
+                      onDelete={handleDeleteCompany}
+                      onCategoryClick={(cat) => setSelectedCategory(cat)}
+                    />
+                  ))}
+                </div>
 
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-8 py-4 border-t border-slate-200 dark:border-slate-800">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                  className="p-2 text-xs font-medium rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <span className="text-xs font-medium text-slate-600 dark:text-slate-300 px-2">
-                  Page {page} of {totalPages}
-                </span>
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages}
-                  className="p-2 text-xs font-medium rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 mt-8 py-4 border-t border-slate-200 dark:border-slate-800">
+                    <button
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page <= 1}
+                      className="p-2 text-xs font-medium rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <span className="text-xs font-medium text-slate-600 dark:text-slate-300 px-2">
+                      Page {page} of {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={page >= totalPages}
+                      className="p-2 text-xs font-medium rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

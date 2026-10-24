@@ -38,6 +38,12 @@ export interface CategoryFacet {
   count: number;
 }
 
+export interface CountryFacet {
+  name: string;
+  code?: string;
+  count: number;
+}
+
 export interface BatchAddResult {
   message: string;
   submittedCount: number;

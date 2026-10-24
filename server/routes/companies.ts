@@ -16,13 +16,67 @@ const router = Router();
 router.use(requireAuth);
 
 /**
+ * GET /api/companies/export
+ * Download CSV file of all user's companies with tags
+ */
+router.get('/export', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = new ObjectId(req.user!.userId);
+    const { db } = await connectToDatabase();
+
+    const companies = await db
+      .collection<CompanyDoc>('companies')
+      .find({ userId })
+      .sort({ isPinned: -1, name: 1 })
+      .toArray();
+
+    const escapeCsv = (val: any) => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val);
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+
+    const headers = [
+      'Company Name',
+      'Careers URL',
+      'Tags',
+      'Country',
+      'Country Code',
+      'Package',
+      'Hiring Difficulty',
+      'Verified',
+    ];
+
+    const rows = companies.map((c) => [
+      escapeCsv(c.name),
+      escapeCsv(c.careersUrl),
+      escapeCsv((c.categories || []).join(', ')),
+      escapeCsv(c.country || ''),
+      escapeCsv(c.countryCode || ''),
+      escapeCsv(c.packageText || ''),
+      escapeCsv(c.hiringDifficulty || ''),
+      escapeCsv(c.isVerified ? 'Yes' : 'No'),
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="companies.csv"');
+    res.status(200).send(csvContent);
+  } catch (err: any) {
+    console.error('Error exporting companies to CSV:', err);
+    res.status(500).json({ error: 'Failed to export companies to CSV' });
+  }
+});
+
+/**
  * GET /api/companies
- * Fetch user's company directory with search, category filtering, favorites, and pagination
+ * Fetch user's company directory with search, category filtering, country filtering, favorites, and pagination
  */
 router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = new ObjectId(req.user!.userId);
-    const { search, category, favoritesOnly, page = '1', limit = '100', sortBy } = req.query;
+    const { search, category, country, favoritesOnly, page = '1', limit = '100', sortBy } = req.query;
 
     const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
     const limitNum = Math.min(200, Math.max(1, parseInt(limit as string, 10) || 100));
@@ -39,6 +93,11 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
 
     if (category && typeof category === 'string' && category !== 'All') {
       query.categories = category;
+    }
+
+    if (country && typeof country === 'string' && country !== 'All') {
+      const escapedCountry = country.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      query.country = { $regex: new RegExp(`^${escapedCountry}$`, 'i') };
     }
 
     if (search && typeof search === 'string' && search.trim()) {
@@ -69,8 +128,8 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
       sortObj.createdAt = -1;
     }
 
-    // Parallel fetch: matching companies, total matching count, total user count, and category facets
-    const [companies, totalFilteredCount, userTotalCount, categoryAgg] = await Promise.all([
+    // Parallel fetch: matching companies, total matching count, total user count, category facets, and country facets
+    const [companies, totalFilteredCount, userTotalCount, categoryAgg, countryAgg] = await Promise.all([
       db
         .collection<CompanyDoc>('companies')
         .find(query)
@@ -89,10 +148,24 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
           { $sort: { count: -1, _id: 1 } },
         ])
         .toArray(),
+      db
+        .collection<CompanyDoc>('companies')
+        .aggregate([
+          { $match: { userId, country: { $exists: true, $nin: ['', null] } } },
+          { $group: { _id: '$country', count: { $sum: 1 }, code: { $first: '$countryCode' } } },
+          { $sort: { count: -1, _id: 1 } },
+        ])
+        .toArray(),
     ]);
 
     const categoriesList = categoryAgg.map((item) => ({
       name: item._id as string,
+      count: item.count as number,
+    }));
+
+    const countriesList = countryAgg.map((item) => ({
+      name: item._id as string,
+      code: (item.code as string) || '',
       count: item.count as number,
     }));
 
@@ -101,6 +174,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
       totalCount: totalFilteredCount,
       userTotalCount,
       categories: categoriesList,
+      countries: countriesList,
       page: pageNum,
       totalPages: Math.ceil(totalFilteredCount / limitNum) || 1,
     });

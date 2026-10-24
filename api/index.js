@@ -637,10 +637,49 @@ async function researchCompanies(names, db) {
 // server/routes/companies.ts
 var router2 = Router2();
 router2.use(requireAuth);
+router2.get("/export", async (req, res) => {
+  try {
+    const userId = new ObjectId2(req.user.userId);
+    const { db } = await connectToDatabase();
+    const companies = await db.collection("companies").find({ userId }).sort({ isPinned: -1, name: 1 }).toArray();
+    const escapeCsv = (val) => {
+      if (val === null || val === void 0) return '""';
+      const str = String(val);
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+    const headers = [
+      "Company Name",
+      "Careers URL",
+      "Tags",
+      "Country",
+      "Country Code",
+      "Package",
+      "Hiring Difficulty",
+      "Verified"
+    ];
+    const rows = companies.map((c) => [
+      escapeCsv(c.name),
+      escapeCsv(c.careersUrl),
+      escapeCsv((c.categories || []).join(", ")),
+      escapeCsv(c.country || ""),
+      escapeCsv(c.countryCode || ""),
+      escapeCsv(c.packageText || ""),
+      escapeCsv(c.hiringDifficulty || ""),
+      escapeCsv(c.isVerified ? "Yes" : "No")
+    ]);
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="companies.csv"');
+    res.status(200).send(csvContent);
+  } catch (err) {
+    console.error("Error exporting companies to CSV:", err);
+    res.status(500).json({ error: "Failed to export companies to CSV" });
+  }
+});
 router2.get("/", async (req, res) => {
   try {
     const userId = new ObjectId2(req.user.userId);
-    const { search, category, favoritesOnly, page = "1", limit = "100", sortBy } = req.query;
+    const { search, category, country, favoritesOnly, page = "1", limit = "100", sortBy } = req.query;
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 100));
     const skip = (pageNum - 1) * limitNum;
@@ -651,6 +690,10 @@ router2.get("/", async (req, res) => {
     }
     if (category && typeof category === "string" && category !== "All") {
       query.categories = category;
+    }
+    if (country && typeof country === "string" && country !== "All") {
+      const escapedCountry = country.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      query.country = { $regex: new RegExp(`^${escapedCountry}$`, "i") };
     }
     if (search && typeof search === "string" && search.trim()) {
       const searchTerm = search.trim();
@@ -677,7 +720,7 @@ router2.get("/", async (req, res) => {
     } else {
       sortObj.createdAt = -1;
     }
-    const [companies, totalFilteredCount, userTotalCount, categoryAgg] = await Promise.all([
+    const [companies, totalFilteredCount, userTotalCount, categoryAgg, countryAgg] = await Promise.all([
       db.collection("companies").find(query).sort(sortObj).skip(skip).limit(limitNum).toArray(),
       db.collection("companies").countDocuments(query),
       db.collection("companies").countDocuments({ userId }),
@@ -686,10 +729,20 @@ router2.get("/", async (req, res) => {
         { $unwind: "$categories" },
         { $group: { _id: "$categories", count: { $sum: 1 } } },
         { $sort: { count: -1, _id: 1 } }
+      ]).toArray(),
+      db.collection("companies").aggregate([
+        { $match: { userId, country: { $exists: true, $nin: ["", null] } } },
+        { $group: { _id: "$country", count: { $sum: 1 }, code: { $first: "$countryCode" } } },
+        { $sort: { count: -1, _id: 1 } }
       ]).toArray()
     ]);
     const categoriesList = categoryAgg.map((item) => ({
       name: item._id,
+      count: item.count
+    }));
+    const countriesList = countryAgg.map((item) => ({
+      name: item._id,
+      code: item.code || "",
       count: item.count
     }));
     res.json({
@@ -697,6 +750,7 @@ router2.get("/", async (req, res) => {
       totalCount: totalFilteredCount,
       userTotalCount,
       categories: categoriesList,
+      countries: countriesList,
       page: pageNum,
       totalPages: Math.ceil(totalFilteredCount / limitNum) || 1
     });
